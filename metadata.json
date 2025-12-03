@@ -1,0 +1,5 @@
+{
+  "name": "Simple Habit",
+  "description": "A minimalist, mobile-first habit tracking application with gamification, streaks, and a voucher system for missed days.",
+  "requestFramePermissions": []
+}
