@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Habit, Checkin, THEME_COLORS, THEME_TEXT_COLORS, HabitTheme, CheckinType } from '../types';
 import * as Storage from '../services/storage';
 import * as Utils from '../utils';
+import { generateShareImage } from '../shareImage';
 import Confetti from '../components/Confetti';
 
 const Home: React.FC = () => {
@@ -16,6 +17,9 @@ const Home: React.FC = () => {
   const [isNewHabitModalOpen, setIsNewHabitModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareImageUrl, setShareImageUrl] = useState<string | null>(null);
+  const [shareGenerating, setShareGenerating] = useState(false);
   
   // New Habit Form State
   const [newHabitTitle, setNewHabitTitle] = useState('');
@@ -63,13 +67,36 @@ const Home: React.FC = () => {
     try {
       setLoading(true);
       const { checkin, user: updatedUser } = await Storage.addCheckin(currentHabit.id, today);
-      setCheckins([...checkins, checkin]);
+      const newCheckins = [...checkins, checkin];
+      setCheckins(newCheckins);
 
       if (updatedUser && updatedUser.voucherCount > (user?.voucherCount || 0)) {
         alert(`🎉 你获得了一张休息日券！（当前共：${updatedUser.voucherCount}）`);
       }
       if (updatedUser) {
         setUser(updatedUser);
+      }
+
+      // 生成分享图片（忽略错误，避免影响打卡体验）
+      try {
+        setShareGenerating(true);
+        const streakForShare = Utils.calculateStreak(
+          newCheckins.filter((c) => c.habitId === currentHabit.id),
+          today
+        );
+        const imageUrl = await generateShareImage({
+          nickname: (updatedUser?.nickname || updatedUser?.username || user?.nickname || user?.username || 'Habit Hero') as string,
+          habitTitle: currentHabit.title,
+          habitIcon: currentHabit.icon,
+          streak: streakForShare,
+          date: today
+        });
+        setShareImageUrl(imageUrl);
+        setShowShareModal(true);
+      } catch (shareErr) {
+        console.error('[share] Failed to generate share image', shareErr);
+      } finally {
+        setShareGenerating(false);
       }
     } catch (err: any) {
       alert(err.message || '打卡失败');
@@ -334,6 +361,49 @@ const Home: React.FC = () => {
       </div>
 
       {isNewHabitModalOpen && renderNewHabitModal()}
+
+      {/* Share modal */}
+      {showShareModal && shareImageUrl && (
+        <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center px-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-4 shadow-2xl">
+            <h2 className="text-lg font-bold text-gray-900 mb-3">分享今日打卡</h2>
+            <p className="text-xs text-gray-500 mb-3">
+              保存这张打卡战报，分享到朋友圈或与好友互相督促。
+            </p>
+            <div className="bg-gray-100 rounded-2xl overflow-hidden mb-4">
+              <img
+                src={shareImageUrl}
+                alt="分享图片预览"
+                className="w-full h-auto block"
+              />
+            </div>
+            {shareGenerating && (
+              <p className="text-xs text-gray-400 mb-2">图片生成中...</p>
+            )}
+            <div className="flex gap-3">
+              <a
+                href={shareImageUrl}
+                download={`habit-share-${today}.png`}
+                className="flex-1"
+              >
+                <button
+                  type="button"
+                  className="w-full py-2 rounded-xl bg-black text-white text-sm font-bold"
+                >
+                  下载图片
+                </button>
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowShareModal(false)}
+                className="flex-1 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-bold"
+              >
+                稍后再说
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
