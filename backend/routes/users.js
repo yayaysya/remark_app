@@ -10,6 +10,7 @@ function mapUserRow(row) {
   if (!row) return null;
   return {
     id: row.id,
+    email: row.email,
     phone: row.phone,
     username: row.username,
     nickname: row.nickname,
@@ -86,7 +87,7 @@ router.patch('/me', async (req, res) => {
   return res.json(mapUserRow(updated));
 });
 
-// Search users by username (fuzzy) or phone (exact)
+// Search users by username (fuzzy), phone (exact) or email (exact)
 router.get('/search', async (req, res) => {
   const q = (req.query.q || '').toString().trim();
   if (!q) {
@@ -98,18 +99,20 @@ router.get('/search', async (req, res) => {
 
   const [rows] = await pool.query(
     `
-      SELECT id, phone, username, nickname, avatar
+      SELECT id, email, phone, username, nickname, avatar
       FROM users
       WHERE (username LIKE ?)
          OR (phone = ?)
+         OR (email = ?)
       ORDER BY created_at DESC
       LIMIT 20
     `,
-    [like, q]
+    [like, q, q]
   );
 
   const users = rows.map((row) => ({
     id: row.id,
+    email: row.email,
     phone: row.phone,
     username: row.username,
     nickname: row.nickname,
@@ -198,4 +201,3 @@ router.get('/:id/checkins', async (req, res) => {
 });
 
 module.exports = router;
-

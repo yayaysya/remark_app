@@ -1,19 +1,12 @@
-// Auth routes: send code, login, get current user.
-// All responses are JSON; designed for consumption by the React frontend.
+// Auth routes: email + password with JWT.
 
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const { getPool } = require('../db');
 
 const router = express.Router();
-
-// In-memory store for verification codes (sufficient for this app and dev usage).
-const codeStore = new Map(); // phone -> { code, expiresAt }
-
-function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
 
 function signToken(user) {
   const secret = process.env.JWT_SECRET || 'dev-secret-change-me';
@@ -21,96 +14,129 @@ function signToken(user) {
   return jwt.sign(payload, secret, { expiresIn: '7d' });
 }
 
-router.post('/send-code', async (req, res) => {
-  const { phone } = req.body || {};
-  if (!phone || String(phone).length < 5) {
-    return res.status(400).json({ error: 'Invalid phone' });
+function mapUserRow(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    phone: row.phone,
+    username: row.username,
+    nickname: row.nickname,
+    voucherCount: row.voucher_count,
+    totalCheckins: row.total_checkins,
+    avatar: row.avatar || undefined
+  };
+}
+
+function isValidEmail(email) {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(email);
+}
+
+// Register with email + password
+router.post('/register', async (req, res) => {
+  const { email, password, nickname } = req.body || {};
+
+  if (!email || !isValidEmail(String(email).trim())) {
+    return res.status(400).json({ error: '邮箱格式不正确' });
   }
-
-  const code = generateCode();
-  const expiresAt = Date.now() + 5 * 60 * 1000;
-  codeStore.set(String(phone), { code, expiresAt });
-
-  console.log(`[auth] send-code for ${phone}: ${code}`);
-
-  // In dev, also return the code to simplify manual testing.
-  return res.json({ success: true, code });
-});
-
-router.post('/login', async (req, res) => {
-  const { phone, code } = req.body || {};
-  if (!phone || !code) {
-    return res.status(400).json({ error: 'Phone and code are required' });
-  }
-
-  const entry = codeStore.get(String(phone));
-  if (!entry || entry.code !== String(code) || entry.expiresAt < Date.now()) {
-    return res.status(400).json({ error: 'Invalid or expired code' });
+  if (!password || String(password).length < 6) {
+    return res.status(400).json({ error: '密码长度至少为 6 位' });
   }
 
   const pool = getPool();
+  const emailNorm = String(email).trim().toLowerCase();
+
+  const [existing] = await pool.query(
+    'SELECT id FROM users WHERE email = ?',
+    [emailNorm]
+  );
+  if (existing.length > 0) {
+    return res.status(400).json({ error: '该邮箱已注册' });
+  }
+
+  const id = uuidv4();
   const now = Date.now();
+  const passwordHash = await bcrypt.hash(String(password), 10);
 
-  // Find or create user by phone.
-  let [rows] = await pool.query('SELECT * FROM users WHERE phone = ?', [phone]);
-  let user;
-  if (rows.length === 0) {
-    const id = uuidv4();
-    const nickname = 'Habit Hero';
-    const username = `user_${phone}`.slice(0, 64);
-    const avatar = null;
-    await pool.query(
-      'INSERT INTO users (id, phone, username, nickname, avatar, voucher_count, total_checkins, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, phone, username, nickname, avatar, 0, 0, now, now]
-    );
-    [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [id]);
-  }
+  const displayName =
+    (nickname && String(nickname).trim()) ||
+    emailNorm.split('@')[0] ||
+    'Habit Hero';
 
-  user = rows[0];
+  await pool.query(
+    `
+      INSERT INTO users (
+        id, email, phone, username, password_hash,
+        nickname, avatar, voucher_count, total_checkins, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      id,
+      emailNorm,
+      null,
+      null, // username 用户后续在“我的”页面编辑
+      passwordHash,
+      displayName,
+      null,
+      0,
+      0,
+      now,
+      now
+    ]
+  );
 
-  // Ensure legacy users have a username
-  if (!user.username) {
-    const generated = `user_${user.phone}`.slice(0, 64);
-    await pool.query(
-      'UPDATE users SET username = ?, updated_at = ? WHERE id = ?',
-      [generated, now, user.id]
-    );
-    const [[updated]] = await pool.query('SELECT * FROM users WHERE id = ?', [user.id]);
-    user = updated;
-  }
+  const [[user]] = await pool.query('SELECT * FROM users WHERE id = ?', [id]);
 
   const token = signToken(user);
-  codeStore.delete(String(phone));
 
-  return res.json({
+  return res.status(201).json({
     token,
-    user: {
-      id: user.id,
-      phone: user.phone,
-      username: user.username,
-      nickname: user.nickname,
-      voucherCount: user.voucher_count,
-      totalCheckins: user.total_checkins,
-      avatar: user.avatar || undefined
-    }
+    user: mapUserRow(user)
   });
 });
 
+// Login with email + password
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body || {};
+
+  if (!email || !password) {
+    return res.status(400).json({ error: '邮箱和密码均为必填项' });
+  }
+
+  const pool = getPool();
+  const emailNorm = String(email).trim().toLowerCase();
+
+  const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [emailNorm]);
+  if (rows.length === 0) {
+    return res.status(400).json({ error: '邮箱或密码错误' });
+  }
+
+  const user = rows[0];
+  if (!user.password_hash) {
+    return res.status(400).json({ error: '该账号尚未设置密码，请联系管理员' });
+  }
+
+  const ok = await bcrypt.compare(String(password), user.password_hash);
+  if (!ok) {
+    return res.status(400).json({ error: '邮箱或密码错误' });
+  }
+
+  const token = signToken(user);
+
+  return res.json({
+    token,
+    user: mapUserRow(user)
+  });
+});
+
+// Current user info
 router.get('/me', async (req, res) => {
   const user = req.user;
   if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-
-  return res.json({
-    id: user.id,
-    phone: user.phone,
-    username: user.username,
-    nickname: user.nickname,
-    voucherCount: user.voucher_count,
-    totalCheckins: user.total_checkins,
-    avatar: user.avatar || undefined
-  });
+  return res.json(mapUserRow(user));
 });
 
 module.exports = router;
+

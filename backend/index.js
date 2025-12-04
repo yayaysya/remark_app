@@ -30,7 +30,7 @@ app.use((req, res, next) => {
 
 // Auth middleware: attaches req.user for authenticated routes.
 app.use(async (req, res, next) => {
-  if (req.path === '/api/auth/send-code' || req.path === '/api/auth/login') {
+  if (req.path === '/api/auth/login' || req.path === '/api/auth/register') {
     return next();
   }
 

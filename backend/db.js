@@ -41,8 +41,10 @@ async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id VARCHAR(64) PRIMARY KEY,
-      phone VARCHAR(32) NOT NULL UNIQUE,
+      email VARCHAR(255) UNIQUE,
+      phone VARCHAR(32) UNIQUE,
       username VARCHAR(64) UNIQUE,
+      password_hash VARCHAR(255),
       nickname VARCHAR(255),
       avatar VARCHAR(1024),
       voucher_count INT NOT NULL DEFAULT 0,
@@ -92,6 +94,41 @@ async function initDb() {
     if (!(err && err.code === 'ER_DUP_FIELDNAME')) {
       throw err;
     }
+  }
+
+  // Ensure email column exists
+  try {
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN email VARCHAR(255) UNIQUE
+    `);
+  } catch (err) {
+    if (!(err && err.code === 'ER_DUP_FIELDNAME')) {
+      throw err;
+    }
+  }
+
+  // Ensure password_hash column exists
+  try {
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN password_hash VARCHAR(255)
+    `);
+  } catch (err) {
+    if (!(err && err.code === 'ER_DUP_FIELDNAME')) {
+      throw err;
+    }
+  }
+
+  // Make phone nullable and keep it unique (for lookup/search, but not required for login).
+  try {
+    await pool.query(`
+      ALTER TABLE users
+      MODIFY phone VARCHAR(32) NULL UNIQUE
+    `);
+  } catch (err) {
+    // If this fails (e.g., different column definition), we log and continue.
+    console.warn('[db] Could not relax phone column nullability:', err.code || err.message);
   }
 
   // Follows table for social graph (who follows whom).

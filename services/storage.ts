@@ -61,17 +61,20 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // --- Auth ---
 
-export const requestLoginCode = async (phone: string) => {
-  await request<{ success: boolean; code?: string }>('/auth/send-code', {
+export const registerUser = async (email: string, password: string, nickname?: string): Promise<User> => {
+  const result = await request<{ token: string; user: User }>('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ phone }),
+    body: JSON.stringify({ email, password, nickname }),
   });
+  setAuthToken(result.token);
+  cachedUser = result.user;
+  return result.user;
 };
 
-export const loginUser = async (phone: string, code: string): Promise<User> => {
+export const loginUser = async (email: string, password: string): Promise<User> => {
   const result = await request<{ token: string; user: User }>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ phone, code }),
+    body: JSON.stringify({ email, password }),
   });
   setAuthToken(result.token);
   cachedUser = result.user;
