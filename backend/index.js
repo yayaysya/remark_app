@@ -6,6 +6,7 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
+const path = require('path');
 const { initDb, getPool } = require('./db');
 
 dotenv.config();
@@ -14,6 +15,12 @@ const app = express();
 
 app.use(express.json());
 app.use(cors());
+
+// Static files for uploaded content (e.g., avatars)
+app.use(
+  '/uploads',
+  express.static(path.resolve(__dirname, 'uploads'))
+);
 
 // Simple request logging for visibility.
 app.use((req, res, next) => {
@@ -53,6 +60,9 @@ app.use(async (req, res, next) => {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/habits', require('./routes/habits'));
 app.use('/api/checkins', require('./routes/checkins'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/users', require('./routes/avatar'));
+app.use('/api/follows', require('./routes/follows'));
 
 // Health check
 app.get('/api/health', (req, res) => {

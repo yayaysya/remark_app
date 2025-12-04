@@ -98,6 +98,62 @@ export const fetchCurrentUser = async (): Promise<User | null> => {
 
 export const getCachedUser = () => cachedUser;
 
+// --- Current user profile ---
+
+export const fetchProfile = async (): Promise<User | null> => {
+  const token = getAuthToken();
+  if (!token) return null;
+  try {
+    const user = await request<User>('/users/me', { method: 'GET' });
+    cachedUser = user;
+    return user;
+  } catch {
+    removeAuthToken();
+    return null;
+  }
+};
+
+export const updateProfile = async (payload: { username?: string; nickname?: string }): Promise<User> => {
+  const user = await request<User>('/users/me', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  cachedUser = user;
+  return user;
+};
+
+export const uploadAvatar = async (file: File): Promise<User> => {
+  const token = getAuthToken();
+  const formData = new FormData();
+  formData.append('avatar', file);
+
+  const headers: HeadersInit = {};
+  if (token) {
+    (headers as any).Authorization = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE}/users/me/avatar`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    let errorBody: any = null;
+    try {
+      errorBody = await res.json();
+    } catch {
+      // ignore
+    }
+    const error = new Error(errorBody?.error || `Request failed with status ${res.status}`);
+    throw error;
+  }
+
+  const user = (await res.json()) as User;
+  cachedUser = user;
+  return user;
+};
+
 // --- Habits ---
 
 export const fetchHabits = async (): Promise<Habit[]> => {
@@ -154,4 +210,58 @@ export const spendVoucher = async (habitId: string, date: string): Promise<{ use
   });
   cachedUser = result.user;
   return { user: result.user };
+};
+
+// --- Social: search & follows ---
+
+export const searchUsers = async (query: string) => {
+  const result = await request<{ users: Array<Pick<User, 'id' | 'username' | 'nickname' | 'avatar'>> }>(
+    `/users/search?q=${encodeURIComponent(query)}`,
+    { method: 'GET' }
+  );
+  return result.users;
+};
+
+export const getFollows = async () => {
+  const result = await request<{ follows: Array<Pick<User, 'id' | 'username' | 'nickname' | 'avatar'>> }>(
+    '/follows',
+    { method: 'GET' }
+  );
+  return result.follows;
+};
+
+export const followUser = async (targetUserId: string) => {
+  const result = await request<{ follow: Pick<User, 'id' | 'username' | 'nickname' | 'avatar'> }>('/follows', {
+    method: 'POST',
+    body: JSON.stringify({ targetUserId }),
+  });
+  return result.follow;
+};
+
+export const unfollowUser = async (targetUserId: string) => {
+  await request(`/follows/${encodeURIComponent(targetUserId)}`, {
+    method: 'DELETE',
+  });
+};
+
+// --- Other users' data for supervision ---
+
+export const fetchUserProfileById = async (userId: string): Promise<User> => {
+  return request<User>(`/users/${encodeURIComponent(userId)}`, { method: 'GET' });
+};
+
+export const fetchUserHabits = async (userId: string): Promise<Habit[]> => {
+  const result = await request<{ habits: Habit[] }>(`/users/${encodeURIComponent(userId)}/habits`, {
+    method: 'GET',
+  });
+  return result.habits;
+};
+
+export const fetchUserCheckins = async (userId: string, habitId?: string): Promise<Checkin[]> => {
+  const qs = habitId ? `?habitId=${encodeURIComponent(habitId)}` : '';
+  const result = await request<{ checkins: Checkin[] }>(
+    `/users/${encodeURIComponent(userId)}/checkins${qs}`,
+    { method: 'GET' }
+  );
+  return result.checkins;
 };

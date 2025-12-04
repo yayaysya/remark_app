@@ -57,15 +57,27 @@ router.post('/login', async (req, res) => {
   if (rows.length === 0) {
     const id = uuidv4();
     const nickname = 'Habit Hero';
+    const username = `user_${phone}`.slice(0, 64);
     const avatar = null;
     await pool.query(
-      'INSERT INTO users (id, phone, nickname, avatar, voucher_count, total_checkins, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, phone, nickname, avatar, 0, 0, now, now]
+      'INSERT INTO users (id, phone, username, nickname, avatar, voucher_count, total_checkins, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, phone, username, nickname, avatar, 0, 0, now, now]
     );
     [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [id]);
   }
 
   user = rows[0];
+
+  // Ensure legacy users have a username
+  if (!user.username) {
+    const generated = `user_${user.phone}`.slice(0, 64);
+    await pool.query(
+      'UPDATE users SET username = ?, updated_at = ? WHERE id = ?',
+      [generated, now, user.id]
+    );
+    const [[updated]] = await pool.query('SELECT * FROM users WHERE id = ?', [user.id]);
+    user = updated;
+  }
 
   const token = signToken(user);
   codeStore.delete(String(phone));
@@ -75,6 +87,7 @@ router.post('/login', async (req, res) => {
     user: {
       id: user.id,
       phone: user.phone,
+      username: user.username,
       nickname: user.nickname,
       voucherCount: user.voucher_count,
       totalCheckins: user.total_checkins,
@@ -92,6 +105,7 @@ router.get('/me', async (req, res) => {
   return res.json({
     id: user.id,
     phone: user.phone,
+    username: user.username,
     nickname: user.nickname,
     voucherCount: user.voucher_count,
     totalCheckins: user.total_checkins,

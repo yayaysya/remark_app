@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, BarChart2, Award, User } from 'lucide-react';
+import { Home, BarChart2, Award, User, UserPlus } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const BottomNav: React.FC = () => {
@@ -9,6 +9,7 @@ const BottomNav: React.FC = () => {
   const tabs = [
     { id: 'home', icon: Home, label: '习惯', path: '/' },
     { id: 'stats', icon: BarChart2, label: '统计', path: '/stats' },
+    { id: 'follow', icon: UserPlus, label: '关注', path: '/follow' },
     { id: 'honors', icon: Award, label: '荣誉', path: '/honors' },
     { id: 'profile', icon: User, label: '我的', path: '/profile' },
   ];

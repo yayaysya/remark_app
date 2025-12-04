@@ -42,6 +42,7 @@ async function initDb() {
     CREATE TABLE IF NOT EXISTS users (
       id VARCHAR(64) PRIMARY KEY,
       phone VARCHAR(32) NOT NULL UNIQUE,
+      username VARCHAR(64) UNIQUE,
       nickname VARCHAR(255),
       avatar VARCHAR(1024),
       voucher_count INT NOT NULL DEFAULT 0,
@@ -79,6 +80,33 @@ async function initDb() {
     )
   `);
 
+  // Ensure username column exists on older databases where table was created without it.
+  // MySQL versions before 8.0.29 do not support "ADD COLUMN IF NOT EXISTS",
+  // so we use a plain ALTER TABLE and ignore the "duplicate column" error.
+  try {
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN username VARCHAR(64) UNIQUE
+    `);
+  } catch (err) {
+    if (!(err && err.code === 'ER_DUP_FIELDNAME')) {
+      throw err;
+    }
+  }
+
+  // Follows table for social graph (who follows whom).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_follows (
+      id VARCHAR(64) PRIMARY KEY,
+      follower_id VARCHAR(64) NOT NULL,
+      followee_id VARCHAR(64) NOT NULL,
+      created_at BIGINT NOT NULL,
+      UNIQUE KEY uniq_follow (follower_id, followee_id),
+      FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (followee_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   console.log('[db] Connected and schema ensured');
 }
 
@@ -93,4 +121,3 @@ module.exports = {
   initDb,
   getPool
 };
-

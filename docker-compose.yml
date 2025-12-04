@@ -27,6 +27,8 @@ services:
       DATABASE_URL: ${DATABASE_URL}
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
+    volumes:
+      - ./uploads:/app/uploads
 
   frontend:
     build:
@@ -37,4 +39,3 @@ services:
       - backend
     ports:
       - "${FRONTEND_PORT:-80}:80"
-

@@ -1,6 +1,7 @@
 export interface User {
   id: string;
   phone: string;
+  username: string;
   nickname: string;
   voucherCount: number;
   totalCheckins: number;

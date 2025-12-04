@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Stats from './pages/Stats';
 import Honors from './pages/Honors';
 import Profile from './pages/Profile';
+import Follow from './pages/Follow';
 import Login from './pages/Login';
 import * as Storage from './services/storage';
 
@@ -53,6 +54,11 @@ const App: React.FC = () => {
             <Route path="/profile" element={
                 <PrivateRoute>
                     <Profile />
+                </PrivateRoute>
+            } />
+            <Route path="/follow" element={
+                <PrivateRoute>
+                    <Follow />
                 </PrivateRoute>
             } />
         </Routes>
