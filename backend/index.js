@@ -71,7 +71,26 @@ app.get('/api/health', (req, res) => {
 
 async function start() {
   try {
-    await initDb();
+    // MySQL 容器在 docker-compose 中虽然会先启动，但并不保证立即就绪。
+    // 这里增加一个简单的重试机制，避免因为启动时机问题导致 ECONNREFUSED。
+    const retries = 5;
+    const delayMs = 3000;
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        await initDb();
+        break;
+      } catch (err) {
+        console.error(
+          `[db] init failed (attempt ${attempt}/${retries})`,
+          err.code || err.message || err
+        );
+        if (attempt === retries) {
+          throw err;
+        }
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+
     const port = Number(process.env.PORT || process.env.BACKEND_PORT || 3000);
     app.listen(port, () => {
       console.log(`[server] Listening on port ${port}`);
