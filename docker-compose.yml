@@ -20,11 +20,11 @@ services:
       - db
     environment:
       NODE_ENV: production
-      PORT: ${BACKEND_PORT}
       JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: ${DATABASE_URL}
     ports:
-      - "${BACKEND_PORT}:${BACKEND_PORT}"
+      # 容器内后端固定监听 3000 端口，BACKEND_PORT 只控制宿主机映射端口
+      - "${BACKEND_PORT:-3000}:3000"
     volumes:
       - ./uploads:/app/uploads
 
