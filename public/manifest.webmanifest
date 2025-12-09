@@ -1,0 +1,22 @@
+{
+  "name": "Simple Habit",
+  "short_name": "Habit",
+  "description": "习惯打卡与监督应用，支持邮箱登录、关注与分享战报。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
